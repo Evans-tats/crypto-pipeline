@@ -6,6 +6,7 @@ x-airflow-common : &airflow-common
     AIRFLOW__CORE__FERNET_KEY: 'dGhpcy1zaG91bGQtYmUtMzJieXRlcw=='
     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
     AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+    PYTHONWARNINGS: "ignore::SyntaxWarning"
     AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth'
     _PIP_ADDITIONAL_REQUIREMENTS: 'kafka-python redis psycopg2-binary'
   volumes:
@@ -18,7 +19,7 @@ x-airflow-common : &airflow-common
 
 services:
   kafka:
-    image: confluentic/cp-kafka:7.8.0
+    image: confluentinc/cp-kafka:7.8.0
     container_name: kafka
     ports:
       - "9092:9092"
@@ -27,7 +28,7 @@ services:
       KAFKA_BROKER_ID: 1
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
-      KAFKA_LISTENERS: PLAINTEXT://kafka
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,CONTROLLER://0.0.0.0:9093,PLAINTEXT_HOST://0.0.0.0:9092
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'false'
@@ -50,7 +51,7 @@ services:
       DYNAMIC_CONFIG_ENABLED: "true"
   
   kafka-init:
-    image: confluentic/cp-kafka:7.8.0
+    image: confluentinc/cp-kafka:7.8.0
     container_name: kafka-init
     depends_on:
       - kafka
@@ -64,6 +65,7 @@ services:
       kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic sentiment_raw --partitions 3 --replication-factor 1
       kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic enriched_trades --partitions 3 --replication-factor 1
       echo 'Topics created.'
+      "
 
 # Database service using TimescaleDB for time-series data
   postgres:
