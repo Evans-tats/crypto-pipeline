@@ -16,6 +16,7 @@ BINANCE_WS_URL = "wss://stream.binance.com:9443/ws/"
 KAFKA_BOOTSTRAP_SERVERS = "localhost:9092"
 SYMBOLS = ["btcusdt", "ethusdt", "bnbusdt"]
 KAFKA_TOPIC = "raw_trades"
+
 def producer() -> KafkaProducer:
     return KafkaProducer(
         bootstrap_server=KAFKA_BOOTSTRAP_SERVERS,
