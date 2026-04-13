@@ -1,7 +1,8 @@
-import websocket
+import websockets
 import asyncio
 import json
 import time
+import os
 import random
 import logging
 
@@ -12,14 +13,14 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 log = logging.getLogger(__name__)
 
 
-BINANCE_WS_URL = "wss://stream.binance.com:9443/ws/"
-KAFKA_BOOTSTRAP_SERVERS = "localhost:9092"
+BINANCE_WS_URL = "wss://stream.binance.com:9443/ws"
+KAFKA_BOOTSTRAP_SERVERS =os.getenv("KAFKA_BOOTSTRAP_SERVERS","localhost:9092")
 SYMBOLS = ["btcusdt", "ethusdt", "bnbusdt"]
 KAFKA_TOPIC = "raw_trades"
 
 def producer() -> KafkaProducer:
     return KafkaProducer(
-        bootstrap_server=KAFKA_BOOTSTRAP_SERVERS,
+        bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
         value_serializer=lambda x: json.dumps(x).encode("utf-8"),
         key_serializer=lambda x: x.encode("utf-8"),
         acks="all",
@@ -45,7 +46,7 @@ async def stream_symbol(symbol: str, producer: KafkaProducer):
     while True:
         try:
             log.info("connecting to %s", ws_url)
-            async with websocket.connect(ws_url, ping_interval=20) as ws:
+            async with websockets.connect(ws_url, ping_interval=20) as ws:
                 backoff = 1
                 async for raw_msg in ws:
                     data = json.loads(raw_msg)
@@ -57,7 +58,7 @@ async def stream_symbol(symbol: str, producer: KafkaProducer):
                                   value=trade)
                     log.info("Produced trade for %s: %s", trade["symbol"], trade["price"])
                     
-        except (websocket.ConneectionClosed, OSError) as exc:
+        except (websockets.ConnectionClosed, OSError) as exc:
             log.warning("Connection lost for %s: %s. Retrying in %d seconds", symbol, exc, backoff)
             await asyncio.sleep(backoff)
             backoff = min(backoff * 2, 60)  

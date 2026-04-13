@@ -67,48 +67,93 @@ services:
       echo 'Topics created.'
       "
 
+  producer:
+    build: ./ingestion     # <-- Point this exactly to your folder name
+    container_name: binance-producer
+    restart: on-failure
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+    depends_on:
+      - kafka
+      - kafka-init
+# ── Spark ────────────────────────────────────────────────────
+
+  spark-master:
+    image: bitnamilegacy/spark:3.5.1
+    container_name: spark-master
+    environment:
+      SPARK_MODE: master
+      SPARK_RPC_AUTHENTICATION_ENABLED: "no"
+      SPARK_RPC_ENCRYPTION_ENABLED: "no"
+    ports:
+      - "8081:8080"
+      - "7077:7077"
+    volumes:
+      - ./streaming/spark_jobs:/opt/bitnami/spark/streaming
+
+  spark-worker:
+    image: bitnamilegacy/spark:3.5.1
+    container_name: spark-worker
+    environment:
+      SPARK_MODE: worker
+      SPARK_MASTER_URL: spark://spark-master:7077
+      SPARK_WORKER_MEMORY: 2G
+      SPARK_WORKER_CORES: 2
+    depends_on:
+      - spark-master
+    volumes:
+      - ./streaming/spark_jobs:/opt/bitnami/spark/streaming
+  
+  # docker exec -it spark-master spark-submit \
+  # --master spark://spark-master:7077 \
+  # /opt/bitnami/spark/streaming/enrich_data.py
+
+
 # Database service using TimescaleDB for time-series data
   postgres:
     image: timescale/timescaledb-ha:pg15-latest 
     container_name: postgres
+    ports:
+      - "5432:5432"
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-crypto}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-crypto_secret}
       POSTGRES_DB: ${POSTGRES_DB:-crypto_db}
     volumes:
-      - postgres_data:/home/postgres/data
+      - postgres_data:/var/lib/postgresql/data
+      - ./storage/migration:/docker-entrypoint-initdb.d
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-crypto} -d ${POSTGRES_DB:-crypto_db} -h localhost"]
       interval: 10s
       timeout: 5s
       retries: 5 
 
-  airflow-init:
-    <<: *airflow-common
-    container_name: airflow-init
-    entrypoint: /bin/bash
-    command:
-      - -c
-      - | 
-        airflow db init
-        airflow users create -u admin -p admin -f Admin -l User -r Admin -e evanskipsang21@gmail.com
+  # airflow-init:
+  #   <<: *airflow-common
+  #   container_name: airflow-init
+  #   entrypoint: /bin/bash
+  #   command:
+  #     - -c
+  #     - | 
+  #       airflow db migrate
+  #       airflow users create -u admin -p admin -f Admin -l User -r Admin -e evanskipsang21@gmail.com
 
-  airflow-webserver:
-    <<: *airflow-common
-    container_name: airflow-webserver
-    ports:
-      - "8085:8080"
-    command: webserver
-    depends_on:
-      - airflow-init
+  # airflow-webserver:
+  #   <<: *airflow-common
+  #   container_name: airflow-webserver
+  #   ports:
+  #     - "8085:8080"
+  #   command: webserver
+  #   depends_on:
+  #     - airflow-init
 
-  airflow-scheduler:
-    <<: *airflow-common
-    container_name: airflow-scheduler
-    command: scheduler
-    depends_on:
-      - airflow-init
+  # airflow-scheduler:
+  #   <<: *airflow-common
+  #   container_name: airflow-scheduler
+  #   command: scheduler
+  #   depends_on:
+  #     - airflow-init
 
 volumes:
   postgres_data:
-  airflow_logs:
+  # airflow_logs:

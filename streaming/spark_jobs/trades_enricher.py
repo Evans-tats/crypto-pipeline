@@ -1,7 +1,10 @@
 import os 
+import time
 
 from pyspark.sql import SparkSession,DataFrame
 from pyspark.sql import functions as F
+from pyspark.sql.window import Window
+import psycopg2
 
 
 
@@ -13,20 +16,23 @@ TRADE_SCHEMA = """
     buyer_market_maker BOOLEAN,
     trade_time LONG,
     event_time LONG,
-    ingested_at LONG
+    ingestion_time LONG
 """
 
 
 KAFKA_BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "kafka:29092")
 POSTGRES_URL = os.getenv("POSTGRES_URL","jdbc:postgresql://postgres:5432/crypto_db")
 POSTGRES_USER = os.getenv("POSTGRES_USER", "crypto")
+POSTGRES_DB = os.getenv("POSTGRES_DB", "crypto_db")
 POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "crypto_secret")
 CHEKPOINT_DIR = "/tmp/checkpoint/trades_enricher"
+POSTGRES_HOST = POSTGRES_URL.split("//")[1].split(":")[0]
+
 
 def create_spark()  -> SparkSession:
     return (
         SparkSession.builder.appName("TradesEnricher")
-        .config("spark.sql.streaming.chekpointLocation", CHEKPOINT_DIR)
+        .config("spark.sql.streaming.checkpointLocation", CHEKPOINT_DIR)
         .config("spark.sql.shuffle.partitions", "4")
         .getOrCreate()
     )
@@ -35,7 +41,7 @@ def read_trades(spark: SparkSession) -> DataFrame:
     raw = (
         spark.readStream.format("kafka")
         .option("kafka.bootstrap.servers", KAFKA_BOOTSTRAP)
-        .option("subscribe", "trades")
+        .option("subscribe", "raw_trades")
         .option("startingOffsets", "latest")
         .load()
     )
@@ -76,19 +82,80 @@ def compute_ohlcv_vwap(df : DataFrame) -> DataFrame:
         )
     )
 
+# def write_to_postgres(batch_df: DataFrame, batch_id: int) -> None:
+#     if batch_df.isEmpty():
+#         print("-> Batch is empty. Waiting for more data...")
+#         return
+
+
+#     batch_df.write.format("jdbc").options(
+#         url=POSTGRES_URL,
+#         driver="org.postgresql.Driver",
+#         dbtable="trade_indicators",
+#         user=POSTGRES_USER,
+#         password=POSTGRES_PASSWORD
+#     ).mode("append").save()
+
+#     print(f"Batch {batch_id} written to Postgres with {batch_df.count()} records")
+
+
 def write_to_postgres(batch_df: DataFrame, batch_id: int) -> None:
     if batch_df.isEmpty():
+        print(f"-> Batch {batch_id} is empty. Waiting for more data...")
         return
 
+    staging_table = f"temp_staging_{batch_id}_{int(time.time())}"
+
+    # 1. Write batch to a uniquely-named staging table
     batch_df.write.format("jdbc").options(
         url=POSTGRES_URL,
         driver="org.postgresql.Driver",
-        dbtable="trade_indicators",
+        dbtable=staging_table,
         user=POSTGRES_USER,
-        password=POSTGRES_PASSWORD
-    ).mode("append").save()
+        password=POSTGRES_PASSWORD,
+    ).mode("overwrite").save()
 
-    print(f"Batch {batch_id} written to Postgres with {batch_df.count()} records")
+    # 2. Upsert from staging → target, then clean up
+    upsert_sql = f"""
+    INSERT INTO trade_indicators (window_start, window_end, symbol, open_price, high_price, low_price, close_price, volume, trade_count, vwap)
+    SELECT window_start, window_end, symbol, open_price, high_price, low_price, close_price, volume, trade_count, vwap
+    FROM {staging_table}
+    ON CONFLICT (window_start, symbol)
+    DO UPDATE SET
+        window_end  = EXCLUDED.window_end,
+        open_price  = EXCLUDED.open_price,
+        high_price  = EXCLUDED.high_price,
+        low_price   = EXCLUDED.low_price,
+        close_price = EXCLUDED.close_price,
+        volume      = EXCLUDED.volume,
+        trade_count = EXCLUDED.trade_count,
+        vwap        = EXCLUDED.vwap;
+"""
+    cleanup_sql = f"DROP TABLE IF EXISTS {staging_table};"
+
+    conn = None
+    try:
+        conn = psycopg2.connect(
+            host=POSTGRES_HOST, dbname=POSTGRES_DB,
+            user=POSTGRES_USER, password=POSTGRES_PASSWORD,
+            connect_timeout=10
+        )
+        with conn:               # auto-commit/rollback on exit
+            with conn.cursor() as cur:
+                cur.execute(upsert_sql)
+        print(f"Batch {batch_id} upserted successfully.")
+    except Exception as e:
+        print(f"Error during upsert on batch {batch_id}: {e}")
+        raise                    # let Spark retry the batch
+    finally:
+        if conn:
+            try:
+                with conn.cursor() as cur:
+                    cur.execute(cleanup_sql)
+                conn.commit()
+            except Exception as cleanup_err:
+                print(f"Warning: failed to drop staging table {staging_table}: {cleanup_err}")
+            conn.close()
 
 def write_to_kafka(df:DataFrame) -> None:
     kafka_df = df.select(
@@ -124,5 +191,5 @@ def main() -> None:
     print("Trades Enricher is running...")
     spark.streams.awaitAnyTermination()
 
-    if __name__ == "__main__":
-        main()
+if __name__ == "__main__":
+    main()
