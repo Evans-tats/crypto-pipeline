@@ -104,6 +104,36 @@ services:
     volumes:
       - ./streaming/spark_jobs:/opt/bitnami/spark/streaming
   
+  spark-submit:
+    image: bitnami/spark:3.5.1
+    depends_on:
+      - spark-master
+      - kafka
+      - postgres
+    volumes:
+      - ./streaming:/opt/bitnami/spark/streaming
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - POSTGRES_URL=jdbc:postgresql://postgres:5432/crypto_db
+      - POSTGRES_USER=crypto
+      - POSTGRES_PASSWORD=crypto_secret
+      - POSTGRES_DB=crypto_db
+    command: >
+      bash -c "
+        pip install psycopg2-binary -q &&
+        spark-submit
+        --master spark://spark-master:7077
+        --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.1,org.postgresql:postgresql:42.7.2
+        --conf spark.driver.host=spark-submit
+        --conf spark.driver.bindAddress=0.0.0.0
+        --conf spark.driver.port=7078
+        --conf spark.blockManager.port=7079
+        --conf spark.rpc.askTimeout=600s
+        --conf spark.network.timeout=600s
+        /opt/bitnami/spark/streaming/trades_enricher.py
+      "
+    restart: on-failure  # restarts if the job crashes
+
   # docker exec -it spark-master spark-submit \
   # --master spark://spark-master:7077 \
   # /opt/bitnami/spark/streaming/enrich_data.py

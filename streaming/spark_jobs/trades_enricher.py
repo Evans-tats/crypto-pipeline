@@ -131,6 +131,7 @@ def write_to_postgres(batch_df: DataFrame, batch_id: int) -> None:
         trade_count = EXCLUDED.trade_count,
         vwap        = EXCLUDED.vwap;
 """
+    
     cleanup_sql = f"DROP TABLE IF EXISTS {staging_table};"
 
     conn = None
