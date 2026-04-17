@@ -67,10 +67,21 @@ services:
       echo 'Topics created.'
       "
 
-  producer:
+  binance-producer:
     build: ./ingestion     # <-- Point this exactly to your folder name
     container_name: binance-producer
     restart: on-failure
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+    depends_on:
+      - kafka
+      - kafka-init
+  
+  coingeko-producer:
+    build: ./ingestion     # <-- Point this exactly to your folder name
+    container_name: coinbase-producer
+    restart: on-failure
+    command: python coingecko_producer.py
     environment:
       - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
     depends_on:
