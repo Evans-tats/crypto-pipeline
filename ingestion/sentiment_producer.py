@@ -12,7 +12,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 log = logging.getLogger(__name__)
  
 
-KAFKA_BOOTSTRAP_SERVERS = "localhost:29092"
+KAFKA_BOOTSTRAP_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:29092")
 KAFKA_TOPIC = "sentiment_analysis"
 
 SUBREDDITS = ["CryptoCurrency", "Bitcoin", "Ethereum", "Solana"]
