@@ -6,7 +6,12 @@ from pyspark.sql import functions as F
 from pyspark.sql.window import Window
 import psycopg2
 
+import logging
+from redis_cache import IndicatorCache
 
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+log = logging.getLogger(__name__)
 
 TRADE_SCHEMA = """
     symbol STRING,
@@ -82,22 +87,6 @@ def compute_ohlcv_vwap(df : DataFrame) -> DataFrame:
         )
     )
 
-# def write_to_postgres(batch_df: DataFrame, batch_id: int) -> None:
-#     if batch_df.isEmpty():
-#         print("-> Batch is empty. Waiting for more data...")
-#         return
-
-
-#     batch_df.write.format("jdbc").options(
-#         url=POSTGRES_URL,
-#         driver="org.postgresql.Driver",
-#         dbtable="trade_indicators",
-#         user=POSTGRES_USER,
-#         password=POSTGRES_PASSWORD
-#     ).mode("append").save()
-
-#     print(f"Batch {batch_id} written to Postgres with {batch_df.count()} records")
-
 
 def write_to_postgres(batch_df: DataFrame, batch_id: int) -> None:
     if batch_df.isEmpty():
@@ -172,6 +161,21 @@ def write_to_kafka(df:DataFrame) -> None:
         .outputMode("update")
         .start()
     )
+def update_cache_from_batch(batch_df,batch_id : int) -> None:
+    cache = IndicatorCache()
+
+    if not cache.ping():
+        log.warning("Cannot connect to Redis. Skipping cache update for batch %d", batch_id)
+        return
+    
+    rows = batch_df.collect()
+
+    for row in rows:
+        d = row.asDict()
+        symbol = d.pop("symbol")
+        cache.write_indicators(symbol, d)
+    
+    log.info("Updated cache for batch %d with %d records", batch_id, len(rows))
 
 def main() -> None:
     spark = create_spark()
@@ -188,6 +192,12 @@ def main() -> None:
     )
     
     write_to_kafka(enriched_df)
+    redis_query = (enriched_df.writeStream.foreachBatch(update_cache_from_batch)
+                .option("checkpointLocation", CHEKPOINT_DIR + "/redis_sink")
+                .outputMode("update")
+                .trigger(processingTime="30 seconds")
+                .start()
+    )
 
     print("Trades Enricher is running...")
     spark.streams.awaitAnyTermination()
