@@ -38,7 +38,7 @@ def create_spark()  -> SparkSession:
     return (
         SparkSession.builder.appName("TradesEnricher")
         .config("spark.sql.streaming.checkpointLocation", CHEKPOINT_DIR)
-        .config("spark.sql.shuffle.partitions", "10")
+        .config("spark.sql.shuffle.partitions", "4")
         .getOrCreate()
     )
 
