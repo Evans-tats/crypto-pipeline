@@ -1,0 +1,19 @@
+apiVersion: 1
+
+datasources:
+  - name: TimescaleDB
+    type: postgres
+    url: postgres:5432
+    user: crypto
+    secureJsonData:
+      password: crypto_secret
+    jsonData:
+      database: crypto_db
+      sslmode: disable
+      maxOpenConns: 10
+      maxIdleConns: 2
+      connMaxLifetime: 14400
+      postgresVersion: 1500
+      timescaledb: true
+    isDefault: true
+    editable: true

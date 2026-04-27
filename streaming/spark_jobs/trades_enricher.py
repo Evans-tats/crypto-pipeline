@@ -25,7 +25,7 @@ TRADE_SCHEMA = """
 """
 
 
-KAFKA_BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "kafka:29092")
+KAFKA_BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "kafka-1:29092")
 POSTGRES_URL = os.getenv("POSTGRES_URL","jdbc:postgresql://postgres:5432/crypto_db")
 POSTGRES_USER = os.getenv("POSTGRES_USER", "crypto")
 POSTGRES_DB = os.getenv("POSTGRES_DB", "crypto_db")

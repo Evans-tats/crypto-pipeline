@@ -1,0 +1,124 @@
+{
+  "title": "Crypto Live Trading",
+  "uid": "crypto-live",
+  "schemaVersion": 38,
+  "refresh": "5s",
+  "time": { "from": "now-1h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Price (5-min candles)",
+      "type": "candlestick",
+      "gridPos": { "x": 0, "y": 0, "w": 16, "h": 10 },
+      "datasource": { "type": "postgres", "uid": "TimescaleDB" },
+      "targets": [
+        {
+          "rawSql": "SELECT bucket AS time, open, high, low, close, volume FROM ohlcv_5min WHERE symbol = 'BTCUSDT' AND bucket >= $__timeFrom() AND bucket < $__timeTo() ORDER BY bucket ASC",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "candleStyle": "candles",
+        "colorStrategy": "open-close",
+        "upColor": "green",
+        "downColor": "red"
+      }
+    },
+    {
+      "id": 2,
+      "title": "Volume",
+      "type": "barchart",
+      "gridPos": { "x": 0, "y": 10, "w": 16, "h": 6 },
+      "datasource": { "type": "postgres", "uid": "TimescaleDB" },
+      "targets": [
+        {
+          "rawSql": "SELECT bucket AS time, volume FROM ohlcv_5min WHERE symbol = 'BTCUSDT' AND bucket >= $__timeFrom() AND bucket < $__timeTo() ORDER BY bucket ASC",
+          "format": "time_series",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "VWAP",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 16, "w": 16, "h": 6 },
+      "datasource": { "type": "postgres", "uid": "TimescaleDB" },
+      "targets": [
+        {
+          "rawSql": "SELECT window_start AS time, vwap FROM trade_indicators WHERE symbol = 'BTCUSDT' AND window_start >= $__timeFrom() AND window_start < $__timeTo() ORDER BY window_start ASC",
+          "format": "time_series",
+          "refId": "C"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Market Cap Rank",
+      "type": "stat",
+      "gridPos": { "x": 16, "y": 0, "w": 8, "h": 4 },
+      "datasource": { "type": "postgres", "uid": "TimescaleDB" },
+      "targets": [
+        {
+          "rawSql": "SELECT market_cap_rank FROM market_metadata WHERE symbol = 'BTCUSDT' ORDER BY polled_at DESC LIMIT 1",
+          "format": "table",
+          "refId": "D"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "24h Price Change %",
+      "type": "stat",
+      "gridPos": { "x": 16, "y": 4, "w": 8, "h": 4 },
+      "datasource": { "type": "postgres", "uid": "TimescaleDB" },
+      "targets": [
+        {
+          "rawSql": "SELECT price_change_pct_24h FROM market_metadata WHERE symbol = 'BTCUSDT' ORDER BY polled_at DESC LIMIT 1",
+          "format": "table",
+          "refId": "E"
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "thresholds": {
+          "steps": [
+            { "color": "red", "value": -5 },
+            { "color": "yellow", "value": 0 },
+            { "color": "green", "value": 2 }
+          ]
+        }
+      }
+    },
+    {
+      "id": 6,
+      "title": "Recent Anomalies",
+      "type": "table",
+      "gridPos": { "x": 16, "y": 8, "w": 8, "h": 14 },
+      "datasource": { "type": "postgres", "uid": "TimescaleDB" },
+      "targets": [
+        {
+          "rawSql": "SELECT detected_at AS time, symbol, round(anomaly_score::numeric, 2) AS score, round(close_price::numeric, 2) AS price, round(volume::numeric, 4) AS volume FROM anomalies WHERE detected_at >= $__timeFrom() ORDER BY detected_at DESC LIMIT 50",
+          "format": "table",
+          "refId": "F"
+        }
+      ]
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "symbol",
+        "type": "custom",
+        "query": "BTCUSDT,ETHUSDT,SOLUSDT",
+        "current": { "value": "BTCUSDT" },
+        "options": [
+          { "text": "BTCUSDT", "value": "BTCUSDT" },
+          { "text": "ETHUSDT", "value": "ETHUSDT" },
+          { "text": "SOLUSDT", "value": "SOLUSDT" }
+        ]
+      }
+    ]
+  }
+}

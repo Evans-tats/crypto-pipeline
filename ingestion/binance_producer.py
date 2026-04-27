@@ -21,11 +21,13 @@ KAFKA_TOPIC = "raw_trades"
 def producer() -> KafkaProducer:
     return KafkaProducer(
         bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
+        api_version=(3, 0, 0),
         value_serializer=lambda x: json.dumps(x).encode("utf-8"),
         key_serializer=lambda x: x.encode("utf-8"),
         acks="all",
         retries=5,
         linger_ms=10,
+        metadata_max_age_ms=30000
     )
 
 def parse_trade(raw : dict) -> dict:
