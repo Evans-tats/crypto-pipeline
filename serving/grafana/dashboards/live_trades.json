@@ -13,7 +13,7 @@
       "datasource": { "type": "postgres", "uid": "TimescaleDB" },
       "targets": [
         {
-          "rawSql": "SELECT bucket AS time, open, high, low, close, volume FROM ohlcv_5min WHERE symbol = 'BTCUSDT' AND bucket >= $__timeFrom() AND bucket < $__timeTo() ORDER BY bucket ASC",
+          "rawSql": "SELECT bucket AS time, open, high, low, close, volume FROM ohlcv_5min WHERE symbol = '$symbol' AND bucket >= $__timeFrom() AND bucket < $__timeTo() ORDER BY bucket ASC",
           "format": "table",
           "refId": "A"
         }
@@ -33,7 +33,7 @@
       "datasource": { "type": "postgres", "uid": "TimescaleDB" },
       "targets": [
         {
-          "rawSql": "SELECT bucket AS time, volume FROM ohlcv_5min WHERE symbol = 'BTCUSDT' AND bucket >= $__timeFrom() AND bucket < $__timeTo() ORDER BY bucket ASC",
+          "rawSql": "SELECT bucket AS time, volume FROM ohlcv_5min WHERE symbol = '$symbol' AND bucket >= $__timeFrom() AND bucket < $__timeTo() ORDER BY bucket ASC",
           "format": "time_series",
           "refId": "B"
         }
